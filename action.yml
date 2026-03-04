@@ -1,0 +1,154 @@
+name: 'MCP Shield'
+description: 'Security scanner for MCP servers — compliance, injection detection, and risk scoring'
+author: 'thuggeelya'
+
+branding:
+  icon: 'shield'
+  color: 'blue'
+
+inputs:
+  server:
+    description: 'Server command to test (e.g., "node dist/index.js" or "npx -y @modelcontextprotocol/server-memory")'
+    required: true
+  fail-on:
+    description: 'Minimum severity to fail CI: critical, high, medium, low, any'
+    required: false
+    default: 'high'
+  comment:
+    description: 'Post scan results as PR comment (true/false)'
+    required: false
+    default: 'true'
+  badge:
+    description: 'Generate badge URL in outputs (true/false)'
+    required: false
+    default: 'true'
+  ml:
+    description: 'Enable ML-based prompt injection detection (true/false)'
+    required: false
+    default: 'false'
+  version:
+    description: 'mcp-shield-cli version to install (e.g., "0.1.0" or "latest")'
+    required: false
+    default: 'latest'
+
+outputs:
+  score:
+    description: 'Numeric score (0-100)'
+  grade:
+    description: 'Letter grade (A+ to F)'
+  badge-url:
+    description: 'shields.io badge URL'
+  report-json:
+    description: 'Path to JSON report file'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install mcp-shield-cli
+      shell: bash
+      run: |
+        if [ "${{ inputs.version }}" = "latest" ]; then
+          pip install mcp-shield-cli
+        else
+          pip install mcp-shield-cli==${{ inputs.version }}
+        fi
+
+    - name: Run scan
+      id: scan
+      shell: bash
+      env:
+        INPUT_SERVER: ${{ inputs.server }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_ML: ${{ inputs.ml }}
+      run: |
+        REPORT="/tmp/mcp-shield-report.json"
+
+        ARGS="--format json --output $REPORT --fail-on $INPUT_FAIL_ON"
+        if [ "$INPUT_ML" = "true" ]; then
+          ARGS="$ARGS --ml"
+        fi
+
+        EXIT_CODE=0
+        mcp-shield test "$INPUT_SERVER" $ARGS || EXIT_CODE=$?
+
+        # Parse JSON report
+        SCORE=$(python3 -c "import json; r=json.load(open('$REPORT')); print(r['summary']['score'])")
+        GRADE=$(python3 -c "import json; r=json.load(open('$REPORT')); print(r['summary']['grade'])")
+        PASSED=$(python3 -c "import json; r=json.load(open('$REPORT')); print(r['summary']['passed'])")
+        FAILED=$(python3 -c "import json; r=json.load(open('$REPORT')); print(r['summary']['failed'])")
+        WARNINGS=$(python3 -c "import json; r=json.load(open('$REPORT')); print(r['summary']['warnings'])")
+        TOTAL=$(python3 -c "import json; r=json.load(open('$REPORT')); print(r['summary']['total'])")
+        SERVER_NAME=$(python3 -c "import json; r=json.load(open('$REPORT')); print(r['server'].get('name', 'unknown'))")
+
+        # Score as integer for badge
+        SCORE_INT=$(python3 -c "print(int(round($SCORE)))")
+
+        # Badge color by grade
+        case "$GRADE" in
+          A+|A|A-) COLOR="brightgreen" ;;
+          B+|B|B-) COLOR="yellowgreen" ;;
+          C+|C)    COLOR="yellow" ;;
+          D)       COLOR="orange" ;;
+          *)       COLOR="red" ;;
+        esac
+
+        BADGE_URL="https://img.shields.io/badge/MCP_Shield-${GRADE}%20(${SCORE_INT})-${COLOR}"
+
+        # Write outputs
+        echo "score=$SCORE_INT" >> $GITHUB_OUTPUT
+        echo "grade=$GRADE" >> $GITHUB_OUTPUT
+        echo "badge-url=$BADGE_URL" >> $GITHUB_OUTPUT
+        echo "report-json=$REPORT" >> $GITHUB_OUTPUT
+
+        # Save for comment step
+        echo "EXIT_CODE=$EXIT_CODE" >> $GITHUB_ENV
+        echo "SCORE=$SCORE_INT" >> $GITHUB_ENV
+        echo "GRADE=$GRADE" >> $GITHUB_ENV
+        echo "PASSED=$PASSED" >> $GITHUB_ENV
+        echo "FAILED=$FAILED" >> $GITHUB_ENV
+        echo "WARNINGS=$WARNINGS" >> $GITHUB_ENV
+        echo "TOTAL=$TOTAL" >> $GITHUB_ENV
+        echo "SERVER_NAME=$SERVER_NAME" >> $GITHUB_ENV
+        echo "BADGE_URL=$BADGE_URL" >> $GITHUB_ENV
+        echo "REPORT=$REPORT" >> $GITHUB_ENV
+
+    - name: Post PR comment
+      if: inputs.comment == 'true' && github.event_name == 'pull_request'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        # Build findings list (FAILs and WARNs only)
+        FINDINGS=$(python3 -c "
+        import json
+        r = json.load(open('$REPORT'))
+        lines = []
+        for c in r['results']:
+            if c['outcome'] in ('fail', 'warn'):
+                icon = ':x:' if c['outcome'] == 'fail' else ':warning:'
+                lines.append(f\"- {icon} **{c['check_id']}** {c['outcome'].upper()} — {c['message']}\")
+        print('\n'.join(lines[:10]))
+        if len(lines) > 10:
+            print(f'- ... and {len(lines) - 10} more')
+        ")
+
+        BODY="## MCP Shield Report
+
+        **Score: ${SCORE}/100 (Grade: ${GRADE})**
+        Checks: ${TOTAL} | Passed: ${PASSED} | Failed: ${FAILED} | Warnings: ${WARNINGS}
+
+        ### Findings
+        ${FINDINGS}
+
+        ---
+        [![MCP Shield](${BADGE_URL})](https://github.com/thuggeelya/mcp-shield)
+        <sub>Scanned with [mcp-shield-cli](https://pypi.org/project/mcp-shield-cli/)</sub>"
+
+        # Remove leading spaces from heredoc-style indentation
+        BODY=$(echo "$BODY" | sed 's/^        //')
+
+        gh pr comment ${{ github.event.pull_request.number }} --body "$BODY"
+
+    - name: Exit with scan result
+      shell: bash
+      run: exit ${{ env.EXIT_CODE }}
