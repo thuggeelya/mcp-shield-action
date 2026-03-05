@@ -10,6 +10,11 @@ Uses [mcp-shield-cli](https://pypi.org/project/mcp-shield-cli/) — automated ch
 name: MCP Shield
 on: [push, pull_request]
 
+permissions:
+  contents: read
+  pull-requests: write
+  security-events: write
+
 jobs:
   scan:
     runs-on: ubuntu-latest
