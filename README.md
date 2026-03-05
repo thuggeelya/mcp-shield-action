@@ -79,13 +79,13 @@ When `comment: true` (default) and triggered by a pull request, the Action posts
 >
 > ### Findings
 >
-> #### :x: [SEC-004](https://github.com/thuggeelya/mcp-shield/blob/main/docs/checks.md#sec-004) FAIL — Found 5 dangerous operation(s) (CWE-78, CWE-250)
+> #### :x: [SEC-004](https://github.com/thuggeelya/mcp-shield/blob/main/docs/checks.md#sec-004--dangerous-operations) FAIL — Found 5 dangerous operation(s) (CWE-78, CWE-250)
 >
 > - `[high] Destructive operation: delete_pod`
 > - `[high] Destructive operation: delete_deployment`
 > - `[high] Exec operation: exec_command`
 >
-> #### :warning: [SEC-002](https://github.com/thuggeelya/mcp-shield/blob/main/docs/checks.md#sec-002) WARN — Found 3 potential injection vector(s) (CWE-78, CWE-89)
+> #### :warning: [SEC-002](https://github.com/thuggeelya/mcp-shield/blob/main/docs/checks.md#sec-002--injection-vector-analysis) WARN — Found 3 potential injection vector(s) (CWE-78, CWE-89)
 >
 > - `[high] Potential injection vector: run_query.sql`
 > - `[medium] Unconstrained path field: read_file.path`

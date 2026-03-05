@@ -141,6 +141,33 @@ runs:
         import json, os
 
         report = json.load(open(os.environ["REPORT"]))
+
+        # GitHub anchor slugs for checks.md headings
+        _ANCHORS = {
+            "COMP-001": "comp-001--verify-handshake",
+            "COMP-002": "comp-002--verify-server-identity",
+            "COMP-003": "comp-003--verify-tool-schemas",
+            "COMP-004": "comp-004--verify-tool-name-format",
+            "COMP-005": "comp-005--verify-ping",
+            "COMP-006": "comp-006--verify-tool-descriptions",
+            "COMP-007": "comp-007--verify-capabilities-consistency",
+            "COMP-008": "comp-008--verify-schema-field-descriptions",
+            "COMP-009": "comp-009--verify-schema-constraints",
+            "COMP-010": "comp-010--verify-resources-and-prompts",
+            "SEC-001": "sec-001--tool-poisoning-scan",
+            "SEC-002": "sec-002--injection-vector-analysis",
+            "SEC-003": "sec-003--security-score",
+            "SEC-004": "sec-004--dangerous-operations",
+            "SEC-005": "sec-005--write-scope-analysis",
+            "SEC-006": "sec-006--idempotency-risk",
+            "SEC-007": "sec-007--costquota-risk",
+            "ADV-001": "adv-001--auth-requirement-hints",
+            "ADV-002": "adv-002--external-service-dependencies",
+            "ADV-003": "adv-003--bulk-operation-warning",
+            "ADV-004": "adv-004--sensitive-data-exposure-hints",
+            "ADV-005": "adv-005--external-network-access",
+        }
+
         score = os.environ["SCORE"]
         grade = os.environ["GRADE"]
         total = os.environ["TOTAL"]
@@ -164,7 +191,8 @@ runs:
                 check_id = f["check_id"]
                 cwe = f.get("metadata", {}).get("cwe_ids", [])
                 cwe_str = f' ({", ".join(cwe)})' if cwe else ""
-                check_url = f"https://github.com/thuggeelya/mcp-shield/blob/main/docs/checks.md#{check_id.lower()}"
+                anchor = _ANCHORS.get(check_id, check_id.lower())
+                check_url = f"https://github.com/thuggeelya/mcp-shield/blob/main/docs/checks.md#{anchor}"
 
                 lines.append(f"#### {icon} [{check_id}]({check_url}) {f['outcome'].upper()} — {f['message']}{cwe_str}\n")
 
